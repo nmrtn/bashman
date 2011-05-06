@@ -1,0 +1,14 @@
+Utilisation de mapedit :
+
+dans un premier temps : tracer le rectangle definissant la superficie totale de la map, pour ceci deplacer le curseur pour cliquer (avec la touche "espace") le coin inferieur droit, le coin superieur gauche étant cliqué par defaut.
+
+dans un second temps : installer les obstacles a l'interieur de la map en cliquant (avec la touche "espace"). Des rectangles pleins peuvent ainsi etre créé en cliquant le coin superieur gauche puis le coin inférieur droit.
+
+dans un troisième temps : installer les teleporteurs en cliquant sur les murs limitant la surface de la carte avec la touche "t" .
+Les teleporteurs permettent de se deplacer du haut de la carte au bas de la carte, de la droite vers la gauche, mais pas des murs verticaux vers les murs horizontaux et respectivement.
+
+plusieurs teleporteurs peuvent etre placés sur le meme mur.
+
+vous pouvez egalement effacé des elements indésiré en les cliquant avec la touch "d"
+
+

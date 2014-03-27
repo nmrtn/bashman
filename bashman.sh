@@ -18,6 +18,120 @@ dxm=-1
 dym=0	 
 }
 
+function noschersvoisins () {
+    local -i x="$1"
+    local -i y="$2"
+    
+    voisins=()
+
+    # à gauche
+    if (( x > 0 )); then
+        voisins[${#voisins}]=$((y*width+(x-1)))
+    fi
+    # à droite
+    if (( x < width )); then
+        voisins[${#voisins}]=$((y*width+(x+1)))
+    fi
+    # en haut
+    if (( y > 0 )); then
+        voisins[${#voisins}]=$(((y-1)*width+x))
+    fi
+    # en bas
+    if (( y < height )); then
+        voisins[${#voisins}]=$(((y+1)*width+x))
+    fi
+    # ces soirées là ... ♫ ♪ ♬ 
+}
+
+function googlemaps () {    # calcul le chemin le plus court du monstre
+                            # vers le perso
+                            # (note: l'auteur est devenu aveugle en relisant son code)
+    local x="$1"
+    local y="$2"
+    local -i src=$((y*width+x))
+    local -a q=()
+    local -a Q=()
+    local -i q_offset=0
+    local -a visited=()
+    local -a dist=()
+    local -i maxdist=65535
+
+    previous=()
+
+    for (( vertex=0; vertex < width*height; vertex++ )); do
+        if [[ ${maping:$vertex:1} -eq 1 ]]; then
+            continue
+        fi
+        dist[$vertex]=$maxdist
+        if (( vertex == src )); then
+            (( q[${#q[@]}] = q[0] ))
+            (( q[0]= src ))
+        else
+            (( q[${#q[@]}] = vertex ))
+        fi
+    done
+
+    dist[$src]=0
+
+    while true; do
+
+        ((u=q[q_offset++]))
+        visited[$u]=$((q_offset-1))
+
+        if [[ -z "$u" ]] || (( dist[u] == maxdist )); then
+            throw "Le perso n'est pas reachable"
+        fi
+
+        # echo "best dist is $u $((u % width))x$((u / width)): ${dist[u]}"
+        if (( u == (ym*width+xm) )); then
+            break
+        fi
+
+        # mise à jour de la liste des voisins
+        noschersvoisins $((u % width)) $((u / width))
+        # echo "$u: ${voisins[@]}"
+
+        for v in "${voisins[@]}"; do
+            if [[ ${maping:$v:1} -eq 1 ]] || ! [[ -z "${visited[$v]}" ]]; then
+                continue
+            fi
+            if (((dist[u] + 1) < dist[v])); then
+                ((dist[v] = dist[u] + 1))
+                previous[v]=$u
+                # on remet $v au début de la queue, et on swap les éléments
+                # pour placer $v à la bonne position
+                d=dist[v]
+                (( q[--q_offset]=v ))
+                q_len=${#q[@]}
+                if false; then
+                for (( o = q_offset+1; o < q_len; ++o )); do
+                    if (( dist[q[o]] < d )); then
+                        (( q[o-1] = q[o] ))
+                        (( q[o] = v ))
+                    else
+                        break
+                    fi
+                done
+                fi
+                unset visited[$v]
+                echo "============"
+                for (( o = q_offset; o < q_len; ++o )); do
+                    printf "%s: %s\n" $((q[o])) $((dist[q[o]]))
+                done
+                exit
+            fi
+        done
+    done
+
+    echo ${previous[$((ym*width+xm))]}
+}
+
+function throw () {
+    # throw table
+    echo "$1 (╯°□°）╯︵ ┻━┻ "
+    exit 1
+}
+
 function affichemap () {
 tmp=`cat map`
 
@@ -253,6 +367,8 @@ function highscore () { 		#Cette fonction permet d'enregister le score que l'on 
 }
 
 function monstre () { 			#cette fonction gere les deplacement "intelligents" du monstre
+
+    googlemaps $x $y
     
 if [ $x -gt $xm ] ; then 		#si la position sur l'axe Ox du perso est plus grande que celle du monstre 
     dxm=1				#alors le monstre tend a se deplacer vers la gauche

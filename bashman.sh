@@ -1,5 +1,7 @@
 #! /bin/bash
 
+. ./heap.sh
+
 function initialisation(){ 		#initialisation du terminal
 save = stty -g             		#sauvegarde de l'etat initial du terminal
 tput clear				#effacement du terminal
@@ -16,6 +18,102 @@ DROITE=$(echo -e "\033[C\n")
 
 dxm=-1
 dym=0	 
+}
+
+function noschersvoisins () {
+    local -i x="$1"
+    local -i y="$2"
+    
+    voisins=()
+
+    # à gauche
+    if (( x > 0 )); then
+        voisins[${#voisins[@]}]=$((y*width+(x-1)))
+    fi
+    # à droite
+    if (( x < width )); then
+        voisins[${#voisins[@]}]=$((y*width+(x+1)))
+    fi
+    # en haut
+    if (( y > 0 )); then
+        voisins[${#voisins[@]}]=$(((y-1)*width+x))
+    fi
+    # en bas
+    if (( y < height )); then
+        voisins[${#voisins[@]}]=$(((y+1)*width+x))
+    fi
+    # ces soirées là ... ♫ ♪ ♬ 
+}
+
+function googlemaps () {    # calcul le chemin le plus court du monstre
+                            # vers le perso
+                            # (note: l'auteur est devenu aveugle en relisant son code)
+    local x="$1"
+    local y="$2"
+    local -i src=$((y*width+x))
+    local -a visited=()
+    local -a dist=()
+    local -i maxdist=65535
+
+    heap_init
+
+    previous=()
+
+    for (( vertex=0; vertex < width*height; vertex++ )); do
+        if [[ ${maping:$vertex:1} -eq 1 ]]; then
+            continue
+        fi
+        if (( vertex == src )); then
+            (( d = 0 ))
+        else
+            (( d = $maxdist ))
+        fi
+        dist[$vertex]=$d
+        heap_add $vertex $d
+    done
+
+    while true; do
+
+        u=${heap_values[1]}
+
+        if [[ -z "$u" ]]; then
+            break
+        fi
+
+        heap_remove
+        visited[$u]=1
+
+        if (( dist[u] == maxdist )); then
+            throw "Le perso n'est pas reachable"
+        fi
+
+        if (( u == (ym*width+xm) )); then
+            break
+        fi
+
+        # mise à jour de la liste des voisins
+        noschersvoisins $((u % width)) $((u / width))
+
+        for v in "${voisins[@]}"; do
+            if [[ ${maping:$v:1} -eq 1 ]] || ! [[ -z "${visited[$v]}" ]]; then
+                continue
+            fi
+            if (((dist[u] + 1) < dist[v])); then
+                ((dist[v] = dist[u] + 1))
+                previous[v]=$u
+                ((d=dist[v]))
+                heap_add $v $d
+            fi
+        done
+    done
+
+    echo ${previous[$((ym*width+xm))]}
+}
+
+function throw () {
+    # throw table
+    echo "$1 (╯°□°）╯︵ ┻━┻ "
+    exit 1
 }
 
 function affichemap () {
@@ -253,41 +351,6 @@ function highscore () { 		#Cette fonction permet d'enregister le score que l'on 
 }
 
 function monstre () { 			#cette fonction gere les deplacement "intelligents" du monstre
-    
-if [ $x -gt $xm ] ; then 		#si la position sur l'axe Ox du perso est plus grande que celle du monstre 
-    dxm=1				#alors le monstre tend a se deplacer vers la gauche
-    dym=0
-    if [ ${maping:$(((($ym+$dym)*$width)+($xm+$dxm))):1} -eq 1 ] ; then #mais si la prochaine position est un mur
-	dxm=0
-	dym=1 				#alors le perso tend a se deplacer vers le bas
-    fi
-    
-elif [ $x -lt $xm ] ; then  		#si la position sur l'axe Ox du perso est plus petite que celle du monstre
-    dxm=-1 				#alors le monstre tend a se deplacer vers la droite
-    dym=0
-     if [ ${maping:$(((($ym+$dym)*$width)+($xm+$dxm))):1} -eq 1 ] ; then  #mais si la prochaine position est un mur
-	dxm=0
-	dym=-1 				#alors le perso tend a se deplacer vers le haut
-    fi
-    
-    
-elif [ $y -lt $ym ] ; then 		#si la position sur l'axe Oy du perso est plus petite que celle du monstre 
-    dym=-1 				#alors le monstre tend a se deplacer vers le haut
-    dxm=0
-     if [ ${maping:$(((($ym+$dym)*$width)+($xm+$dxm))):1} -eq 1 ] ; then #mais si la prochaine position est un mur
-	dxm=-1 				#alors le monstre tend a se deplacer vers la gauche
-	dym=0
-    fi
-    
-    
-elif [ $y -gt $ym ] ; then  		#si la position sur l'axe Oy du perso est plus grande que celle du monstre
-    dym=1				#alors le monstre tend a se deplacer vers le bas
-    dxm=0
-     if [ ${maping:$(((($ym+$dym)*$width)+($xm+$dxm))):1} -eq 1 ] ; then #mais si la prochaine position est un mur
- 	dxm=1 				#alors le monstre tend a se deplacer vers la droite
-	dym=0
-    fi
-fi
 
 if [ $y -eq $ym ] ; then     		#si la position du perso est egale a la position du monstre		
     if [ $x -eq $xm ] ; then
@@ -300,6 +363,8 @@ fi
 
 #deplacement du monstre  
 
+    vm=$(googlemaps $x $y)
+
 	tput cup $ym $xm 
 	tput setaf 3
 	if [ ${maping:$(((($ym)*$width)+($xm))):1} -eq 0 ] ; then #si le caractere sous le monstre est un points
@@ -308,8 +373,9 @@ fi
 	if [ ${maping:$(((($ym)*$width)+($xm))):1} -eq 3 ] ; then #sinon
 	echo -n " "			#on laisse l'espace
 	fi
-	xm=$((($xm+$dxm)))       	#deplacement du monstre sur Ox
-	ym=$((($ym+$dym)))	 	#deplacement du monstre sur Oy
+
+    ((xm = vm % width))
+    ((ym = vm / width))
 	
 	tput cup $ym $xm
 	tput setaf 5

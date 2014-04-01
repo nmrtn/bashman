@@ -1,5 +1,7 @@
 #! /bin/bash
 
+. ./heap.sh
+
 function initialisation(){ 		#initialisation du terminal
 save = stty -g             		#sauvegarde de l'etat initial du terminal
 tput clear				#effacement du terminal
@@ -26,19 +28,19 @@ function noschersvoisins () {
 
     # à gauche
     if (( x > 0 )); then
-        voisins[${#voisins}]=$((y*width+(x-1)))
+        voisins[${#voisins[@]}]=$((y*width+(x-1)))
     fi
     # à droite
     if (( x < width )); then
-        voisins[${#voisins}]=$((y*width+(x+1)))
+        voisins[${#voisins[@]}]=$((y*width+(x+1)))
     fi
     # en haut
     if (( y > 0 )); then
-        voisins[${#voisins}]=$(((y-1)*width+x))
+        voisins[${#voisins[@]}]=$(((y-1)*width+x))
     fi
     # en bas
     if (( y < height )); then
-        voisins[${#voisins}]=$(((y+1)*width+x))
+        voisins[${#voisins[@]}]=$(((y+1)*width+x))
     fi
     # ces soirées là ... ♫ ♪ ♬ 
 }
@@ -49,12 +51,11 @@ function googlemaps () {    # calcul le chemin le plus court du monstre
     local x="$1"
     local y="$2"
     local -i src=$((y*width+x))
-    local -a q=()
-    local -a Q=()
-    local -i q_offset=0
     local -a visited=()
     local -a dist=()
     local -i maxdist=65535
+
+    heap_init
 
     previous=()
 
@@ -62,34 +63,36 @@ function googlemaps () {    # calcul le chemin le plus court du monstre
         if [[ ${maping:$vertex:1} -eq 1 ]]; then
             continue
         fi
-        dist[$vertex]=$maxdist
         if (( vertex == src )); then
-            (( q[${#q[@]}] = q[0] ))
-            (( q[0]= src ))
+            (( d = 0 ))
         else
-            (( q[${#q[@]}] = vertex ))
+            (( d = $maxdist ))
         fi
+        dist[$vertex]=$d
+        heap_add $vertex $d
     done
-
-    dist[$src]=0
 
     while true; do
 
-        ((u=q[q_offset++]))
-        visited[$u]=$((q_offset-1))
+        u=${heap_values[1]}
 
-        if [[ -z "$u" ]] || (( dist[u] == maxdist )); then
+        if [[ -z "$u" ]]; then
+            break
+        fi
+
+        heap_remove
+        visited[$u]=1
+
+        if (( dist[u] == maxdist )); then
             throw "Le perso n'est pas reachable"
         fi
 
-        # echo "best dist is $u $((u % width))x$((u / width)): ${dist[u]}"
         if (( u == (ym*width+xm) )); then
             break
         fi
 
         # mise à jour de la liste des voisins
         noschersvoisins $((u % width)) $((u / width))
-        # echo "$u: ${voisins[@]}"
 
         for v in "${voisins[@]}"; do
             if [[ ${maping:$v:1} -eq 1 ]] || ! [[ -z "${visited[$v]}" ]]; then
@@ -98,27 +101,8 @@ function googlemaps () {    # calcul le chemin le plus court du monstre
             if (((dist[u] + 1) < dist[v])); then
                 ((dist[v] = dist[u] + 1))
                 previous[v]=$u
-                # on remet $v au début de la queue, et on swap les éléments
-                # pour placer $v à la bonne position
-                d=dist[v]
-                (( q[--q_offset]=v ))
-                q_len=${#q[@]}
-                if false; then
-                for (( o = q_offset+1; o < q_len; ++o )); do
-                    if (( dist[q[o]] < d )); then
-                        (( q[o-1] = q[o] ))
-                        (( q[o] = v ))
-                    else
-                        break
-                    fi
-                done
-                fi
-                unset visited[$v]
-                echo "============"
-                for (( o = q_offset; o < q_len; ++o )); do
-                    printf "%s: %s\n" $((q[o])) $((dist[q[o]]))
-                done
-                exit
+                ((d=dist[v]))
+                heap_add $v $d
             fi
         done
     done
@@ -368,43 +352,6 @@ function highscore () { 		#Cette fonction permet d'enregister le score que l'on 
 
 function monstre () { 			#cette fonction gere les deplacement "intelligents" du monstre
 
-    googlemaps $x $y
-    
-if [ $x -gt $xm ] ; then 		#si la position sur l'axe Ox du perso est plus grande que celle du monstre 
-    dxm=1				#alors le monstre tend a se deplacer vers la gauche
-    dym=0
-    if [ ${maping:$(((($ym+$dym)*$width)+($xm+$dxm))):1} -eq 1 ] ; then #mais si la prochaine position est un mur
-	dxm=0
-	dym=1 				#alors le perso tend a se deplacer vers le bas
-    fi
-    
-elif [ $x -lt $xm ] ; then  		#si la position sur l'axe Ox du perso est plus petite que celle du monstre
-    dxm=-1 				#alors le monstre tend a se deplacer vers la droite
-    dym=0
-     if [ ${maping:$(((($ym+$dym)*$width)+($xm+$dxm))):1} -eq 1 ] ; then  #mais si la prochaine position est un mur
-	dxm=0
-	dym=-1 				#alors le perso tend a se deplacer vers le haut
-    fi
-    
-    
-elif [ $y -lt $ym ] ; then 		#si la position sur l'axe Oy du perso est plus petite que celle du monstre 
-    dym=-1 				#alors le monstre tend a se deplacer vers le haut
-    dxm=0
-     if [ ${maping:$(((($ym+$dym)*$width)+($xm+$dxm))):1} -eq 1 ] ; then #mais si la prochaine position est un mur
-	dxm=-1 				#alors le monstre tend a se deplacer vers la gauche
-	dym=0
-    fi
-    
-    
-elif [ $y -gt $ym ] ; then  		#si la position sur l'axe Oy du perso est plus grande que celle du monstre
-    dym=1				#alors le monstre tend a se deplacer vers le bas
-    dxm=0
-     if [ ${maping:$(((($ym+$dym)*$width)+($xm+$dxm))):1} -eq 1 ] ; then #mais si la prochaine position est un mur
- 	dxm=1 				#alors le monstre tend a se deplacer vers la droite
-	dym=0
-    fi
-fi
-
 if [ $y -eq $ym ] ; then     		#si la position du perso est egale a la position du monstre		
     if [ $x -eq $xm ] ; then
 	clear 				#effacement de la carte
@@ -416,6 +363,8 @@ fi
 
 #deplacement du monstre  
 
+    vm=$(googlemaps $x $y)
+
 	tput cup $ym $xm 
 	tput setaf 3
 	if [ ${maping:$(((($ym)*$width)+($xm))):1} -eq 0 ] ; then #si le caractere sous le monstre est un points
@@ -424,8 +373,9 @@ fi
 	if [ ${maping:$(((($ym)*$width)+($xm))):1} -eq 3 ] ; then #sinon
 	echo -n " "			#on laisse l'espace
 	fi
-	xm=$((($xm+$dxm)))       	#deplacement du monstre sur Ox
-	ym=$((($ym+$dym)))	 	#deplacement du monstre sur Oy
+
+    ((xm = vm % width))
+    ((ym = vm / width))
 	
 	tput cup $ym $xm
 	tput setaf 5
